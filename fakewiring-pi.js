@@ -18,6 +18,8 @@
 
 (module.exports = function() {
 
+    var fakedata = require("./fakedata")
+
 
    function wiringPiSetupSys() {
 
@@ -30,8 +32,11 @@
    }
    var intervalPins = {};
    function wiringPiISR(pin, edge, cb) {
+      var speed =  new fakedata.RandomScalar(0.5,15);
       intervalPins[pin] = setInterval(function() {
-        cb(100000);
+        var frequency = speed.next()*5.5;  // for water max is 15kn for winf max is 78kn (15*5.5/1.045)
+        var period = 1000000000/frequency; 
+        cb(period);  
       }, 100);
    }
 

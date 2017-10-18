@@ -18,22 +18,32 @@
 
 (module.exports = function() {
 
-    function FakeIMU() {
+    var fakedata = require("./fakedata")
 
+    function FakeIMU() {
+        // x and y dont move too far from vertical 45 degress max.
+        this.px = new fakedata.RandomScalar(0,Math.PI/4);
+        this.py = new fakedata.RandomScalar(0,Math.PI/4);
+        this.pz = new fakedata.RandomAngle();
+        // max gyro is Math.PI/10 in any axis (ie .341 rad/s max)
+        this.gx = new fakedata.RandomScalar(-Math.PI/10,Math.PI/10);
+        this.gy = new fakedata.RandomScalar(-Math.PI/10,Math.PI/10);
+        this.gz = new fakedata.RandomScalar(-Math.PI/10,Math.PI/10);
     }
 
     FakeIMU.prototype.getValue = function(cb) {
+        var self = this;
         setTimeout(function() {
             var data = {
                 fusionPose: {
-                    x: 0.1,
-                    y: 0.1,
-                    z: 0.1
+                    x: self.px.next(),
+                    y: self.py.next(),
+                    z: self.pz.next()
                 },
                 gyro: {
-                    x: 0.1,
-                    y: 0.1,
-                    z: 0.1
+                    x: self.gx.next(),
+                    y: self.gy.next(),
+                    z: self.gz.next()
 
                 }
             }

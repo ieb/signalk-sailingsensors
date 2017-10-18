@@ -1,0 +1,10 @@
+* /Users/ieb/timefields/nmea2000/signalk-sailsensors/spice_models/AirmarWaterPulseIsolator.asc
+XU1 N002 N003 N001 Out PC817 Igain=1m
+R1 N003 0 2.2K
+R3 Out 0 10K
+V1 N002 0 PULSE(0 8 0.001 0.0001 0.0001 0.001 0.002 100)
+V2 N001 0 3.3
+.tran 10m startup
+.lib PC817.sub
+.backanno
+.end

@@ -18,17 +18,33 @@
 
 (module.exports = function() {
 
-    function Ads15x1() {
+    var fakedata = require("./fakedata")
 
+    var angle =  new fakedata.RandomAngle();
+    /**
+     * The real hardware + npm returns mV.
+     * 
+     */
+    function Ads1x15() {
     }
 
-    Ads15x1.prototype.readADCSingleEnded = function(ch, progGainAmp, samplesPerSecond, cb) {
+    /**
+     * Return the reading in mV.
+     */
+    Ads1x15.prototype.readADCSingleEnded = function(ch, progGainAmp, samplesPerSecond, cb) {
+        var mV;
+        if ( ch === 0) {
+            angle.next();
+            mV = (4+2*Math.sin(angle.c))*2/3; // Divider is a 2/3 divider, input voltage is sin mean 4v amplitude 6v.
+        } else {
+            mV = (4*2*Math.cos(angle.c))*2/3;
+        }
         setTimeout(function() {
-            cb(false, 4.010);
+            cb(false, mV);
         }, 10);
 
     };
 
-  return Ads15x1;
+  return Ads1x15;
 }());
 

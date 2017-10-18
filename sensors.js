@@ -47,9 +47,6 @@
   function DegToRad(v) {
     return v*Math.PI/180.0;
   }
-  function hzPerKnTohzPerMs(h) {
-    return h*3600.0/1852.0;
-  }
 
   function fixAngle(d) {
     if ( d > Math.PI ) d = d - Math.PI;
@@ -66,28 +63,25 @@
    * Filter weight controlls the number of pulses in the iir filter
    * to be 2^filterWeight where filterWeight is 1 - 31.
    */
-  function PulseToVelocityIIR(pin, filterWeight, calibration) {
+  function PulseToVelocityIIR(pin, samples, calibration) {
     this.pin = pin;
     this.calibration = calibration;
-    if ( filterWeight < 1) {
-      this.filterWeight = 1;
-    } else if ( filterWeight > 31 ) {
-      this.filterWeight = 31;
-    } else {
-      this.filterWeight = filterWeight;
-    }
+    console.log("Pulse calibration ", calibration);
+    this.samples = samples;
+    this.distanceReset = new Date();
     this.distance = 0.0;
     this.speed = 0.0;
     this.npulse = 0;
+    this.pulseFrequency = 0;
+    this.pulsesPerMeter = this.calibration[0].pulsesPerMeter;
     this.npulsesRecieved = 0;
     wpi.pinMode(pin, wpi.INPUT);
     wpi.pullUpDnControl(pin, wpi.PUD_UP);
     this.average = 0;
     var self = this;
     wpi.wiringPiISR(pin, wpi.INT_EDGE_FALLING, function(delta) {
-      // apply an IIR filter
-      // self.average = (self.average*(k-1)+delta)/k; or k = filterWeitgh^2, avoiding division costs.
-      self.average = self.average + (self.average-delta)>>self.filterWeight;
+      // apply an IIR filter, use division rather than bit shifting as js is signed.
+      self.average = (self.average*(self.samples-1)+delta)/self.samples;
       self.npulsesRecieved++;
     });
   }
@@ -95,34 +89,35 @@
     wpi.cancelPiISR(this.pin);
   }
 
-  PulseToVelocityIIR.prototype.getPulseCount = function() {
-    return this.npulse;
-  }
 
 
   PulseToVelocityIIR.prototype.read = function() {
     if ( this.npulse === this.npulsesRecieved ) {
       // no pulses since last call, therefore velocity is 0
       this.speed = 0;
+      this.pulseFrequency = 0;
+      this.pulsesPerMeter = this.calibration[0].pulsesPerMeter;
+      console.log("No Pulses");
       return;
     }
     // m = sum of period, hence frequency is 1/(m/numSamples ) = numSamples/m;
     // m is in ns.
     var pulseDiff = this.npulsesRecieved - this.npulse;
     this.npulse = this.npulsesRecieved;
-    var pulseFrequency = (1000000000.0)/this.average;
+    this.pulseFrequency = (1000000000.0)/this.average;
     // the speed will be non linear wrt to speed, so lookup calibration data.
     // ms/Hz is m/s per cycles/s  and so == m per cycle or pulse, allowing trip and log.
     // this is probably more acurate if the reading is over many seconds.
+    this.pulsesPerMeter = this.calibration[this.calibration.length-1].pulsesPerMeter;
     for (var i = 0; i < this.calibration.length-1; i++) {
-      if ( pulseFrequency < this.calibration[i].frequency ) {
-        this.distance = this.distance+pulseDiff/this.calibration[i].msPerHz;
-        this.speed = pulseFrequency/this.calibration[i].msPerHz;
-        return;
+      if ( this.pulseFrequency < this.calibration[i].frequency ) {
+        this.pulsesPerMeter = this.calibration[i].pulsesPerMeter;
+        break;
       }
     }
-    this.distance = this.distance+(pulseDiff/this.calibration[this.calibration.length-1].msPerHz);
-    this.speed = pulseFrequency/this.calibration[this.calibration.length-1].msPerHz;
+    this.distance = this.distance+(pulseDiff/this.pulsesPerMeter);
+    this.speed = this.pulseFrequency/this.pulsesPerMeter;
+    console.log("Pulses ",pulseDiff, this.pulseFrequency, this.pulsesPerMeter, this.distance, this.speed);
   }
 
 
@@ -137,6 +132,7 @@
   function PulseToVelocityMovingAverage(pin, bufsz, calibration) {
     this.pin = pin;
     this.calibration = calibration;
+    this.distanceReset = new Date();
     this.distance = 0.0;
     this.speed = 0.0;
     this.store = new Array(bufsz+1);
@@ -145,6 +141,8 @@
     // the ISR needs to be fast to avoid loosing pulses.
     // the last element of store contains the number of interrupts.
     this.npulse = 0;
+    this.pulseFrequency = 0;
+    this.pulsesPerMeter = this.calibration[0].pulsesPerMeter;
     var i = 0, n = store.length-1;
 
     wpi.pinMode(pin, wpi.INPUT);
@@ -159,9 +157,6 @@
     wpi.cancelPiISR(this.pin);
   };
 
-  PulseToVelocityMovingAverage.prototype.getPulseCount - function() {
-    return this.npulse;
-  }
   /**
    * Get the Velocity in m/s, calculating a moving average on get.
    */
@@ -169,6 +164,8 @@
   PulseToVelocityMovingAverage.prototype.read = function() {
     if ( this.npulse === this.store[this.store.length-1] ) {
       this.velocity = 0;
+      this.pulseFrequency = 0.0;
+      this.pulsesPerMeter = this.calibration[0].pulsesPerMeter;
       return;
     }
     var pulseDiff = this.store[this.store.length-1] - this.npulse;
@@ -194,24 +191,26 @@
       // should be very rare, or impossible, and means the paddle wheel is rotataing
       // so fast the processor cant keep up with pulses. 
       // return 999 m/s
-      this.distance = this.distance+(pulseDiff/this.calibration[this.calibration.length-1].msPerHz);
+      this.pulsesPerMeter = this.calibration[this.calibration.length-1].pulsesPerMeter;
+      this.distance = this.distance+(pulseDiff/this.pulsesPerMeter);
       this.speed = 999.0;
+      this.pulseFrequency = 99999.0;
       return;
 
     } 
     // m = sum of period, hence frequency is 1/(m/numSamples ) = numSamples/m;
     // m is in ns.
-    var pulseFrequency = (1000000000.0*numSamples)/m;
+    this.pulseFrequency = (1000000000.0*numSamples)/m;
+    this.pulsesPerMeter = this.calibration[this.calibration.length-1].pulsesPerMeter;
     // the speed will be non linear wrt to speed, so lookup calibration data.
     for (var i = 0; i < this.calibration.length-1; i++) {
-      if ( pulseFrequency < this.calibration[i].frequency ) {
-        this.distance = this.distance+(pulseDiff/this.calibration[i].msPerHz);
-        this.speed = pulseFrequency/this.calibration[i].msPerHz;
-        return;
+      if ( this.pulseFrequency < this.calibration[i].frequency ) {
+        this.pulsesPerMeter = this.calibration[i].pulsesPerMeter;
+        break;
       }
     }
-    this.distance = this.distance+(pulseDiff/this.calibration[this.calibration.length-1].msPerHz);
-    this.speed = pulseFrequency/this.calibration[this.calibration.length-1].msPerHz;
+    this.distance = this.distance+(pulseDiff/this.pulsesPerMeter);
+    this.speed = pulseFrequency/this.pulsesPerMeter;
     return;
   }
 
@@ -354,9 +353,10 @@
         pulsepin: 6,
         calibration: [
         // linear response of 1.045Hz per kn
+        // conversion is 1/KnToMS so use MSToKn
           {
            frequency: 0,
-           hzPerMs: hzPerKnTohzPerMs(1.045)           
+           pulsesPerMeter: MsToKn(1.045)           
           }
         ],
         sinADC: 0,
@@ -369,9 +369,10 @@
         pulsepin: 7, // GPIO Pin
         calibration: [
         // linear response of 5.5Hz  per kn
+        // conversion is 1/KnToMS so use MSToKn
           {
            frequency: 0,
-           hzPerMs: hzPerKnTohzPerMs(5.5)            
+           pulsesPerMeter: MsToKn(5.5)            
           }
         ]
       }
@@ -422,8 +423,8 @@
     // over 10 pulses.
     // waterSpeed is 5.5Hz per Kn
     // windSpeed is 1.045Hz per Kn
-    this.windSpeedSensor = new PulseToVelocityIIR(this.config.windSensorHardware.pulsepin, 3, this.config.windSensorHardware.calibration);
-    this.waterSpeedSensor = new PulseToVelocityIIR(this.config.waterSensorHardware.pulsepin, 3, this.config.waterSensorHardware.calibration);
+    this.windSpeedSensor = new PulseToVelocityIIR(this.config.windSensorHardware.pulsepin, 10, this.config.windSensorHardware.calibration);
+    this.waterSpeedSensor = new PulseToVelocityIIR(this.config.waterSensorHardware.pulsepin, 10, this.config.waterSensorHardware.calibration);
     
 
     this.rateGyro = new RateGyro();
@@ -495,79 +496,100 @@
             },
             "timestamp": (new Date()).toISOString(),
             "values": [
-                { 
+                { // checked
                   "path": "sensors.timestamp",
                   "value": Date.now()
                 },
-                { 
+                { // checked
                   "path": "sensors.wind.pulses",
-                  "value": self.windSpeedSensor.getPulseCount()
+                  "value": self.windSpeedSensor.npulse
                 },
-                { 
+                { // checked
+                  "path": "sensors.wind.frequency",
+                  "value": self.windSpeedSensor.pulseFrequency
+                },
+                { // checked
+                  "path": "sensors.wind.pulsesPerMeter",
+                  "value": self.windSpeedSensor.pulsesPerMeter
+                },
+                { // checked
                   "path": "sensors.water.pulses",
-                  "value": self.waterSpeedSensor.getPulseCount()
+                  "value": self.waterSpeedSensor.npulse
                 },
-                { 
+                { // checked
+                  "path": "sensors.water.frequency",
+                  "value": self.waterSpeedSensor.pulseFrequency
+                },
+                { // checked
+                  "path": "sensors.water.pulsesPerMeter",
+                  "value": self.waterSpeedSensor.pulsesPerMeter
+                },
+                { // checked
                   "path": "sensors.wind.sinV",
-                  "value":  self.rawSinVStats.mean().toPrecision(4)
+                  "value":  self.rawSinVStats.mean()
                 },
-                { 
+                { // checked
                   "path": "sensors.wind.cosV",
-                  "value":  self.rawCosVStats.mean().toPrecision(4)
+                  "value":  self.rawCosVStats.mean()
                 },
-                {
+                {  // checked
                   "path": "navigation.headingMagnetic",
-                  "value": self.heading.toPrecision(4)
+                  "value": self.heading
                 },
-                {
+                { // checked
                   "path": "navigation.rateOfTurn",
-                  "value": self.rateGyro.yaw.mean().toPrecision(4)
+                  "value": self.rateGyro.yaw.mean()
                 },
-                {
+                { // checked
                   "path": "navigation.attitude.roll",
-                  "value": self.pose.roll.mean().toPrecision(4)
+                  "value": self.pose.roll.mean()
                 },
-                {
+                { // checked
                   "path": "navigation.attitude.pitch",
-                  "value": self.pose.pitch.mean().toPrecision(4)
+                  "value": self.pose.pitch.mean()
                 },
-                {
+                { // checked
                   "path": "navigation.attitude.yaw",
-                  "value": self.pose.yaw.mean().toPrecision(4)
+                  "value": self.pose.yaw.mean()
                 },
-                {
-                  "path": "",
-                  "value": self.aparentWind.speed.toPrecision(4)
+                { //checked
+                  "path": "environment.wind.speedApparent",
+                  "value": self.aparentWind.speed
                 },
-                {
-                  "path": "",
-                  "value": self.aparentWind.angle.toPrecision(4)
+                { // checked
+                  "path": "environment.wind.angleApparent",
+                  "value": self.aparentWind.angle
                 },
-                {
-                  "path": "",
-                  "value": self.trueWind.speed.toPrecision(4)
+                { // checked
+                  "path": "environment.wind.speedTrue",
+                  "value": self.trueWind.speed
                 },
-                {
-                  "path": "",
-                  "value": self.trueWind.angle.toPrecision(4)
+                { // checked
+                  "path": "environment.wind.angleTrue",
+                  "value": self.trueWind.angle
                 },
-                {
-                  "path": "",
-                  "value": self.leeway.toPrecision(4)
+                { // checked
+                  "path": "navigation.leewayAngle",
+                  "value": self.leeway
                 },
-                {
-                  "path": "",
-                  "value": self.waterSpeed.toPrecision(4)
+                { // checked
+                  "path": "navigation.speedThroughWater",
+                  "value": self.waterSpeed
                 },
-                {
-                  "path": "",
-                  "value": self.waterSpeedSensor.distance.toPrecision(4)
+                { // checked
+                  "path": "navigation.trip.log",
+                  "value": self.waterSpeedSensor.distance
+                },
+                { // checked
+                  "path": "navigation.trip.lastReset",
+                  "value": self.waterSpeedSensor.distanceReset
                 }
+
               ]
           }
         ]
       }        
-      // console.log("got sensor delta: " + JSON.stringify(delta))
+       console.log("got sensor delta: " + JSON.stringify(delta))
       app.handleMessage(plugin.id, delta);
     }, config.outputPeriod);
 
@@ -673,18 +695,19 @@
       // see http://www.dewi.de/dewi/fileadmin/pdf/publications/Publikations/S09_2.pdf, figure 9 A100LM-ME1 
       // which appears to be close to most marine annenomiters, abov
       this.windSpeedSensor.read();
+
       this.aparentWind.speed = this.windSpeedSensor.speed;
 
-      if ( this.angleOfHeal > 0.174533) { // > 10 degress + 3%
+      if ( this.angleOfHeel > 0.174533) { // > 10 degress + 3%
         this.aparentWind.speed = this.aparentWind.speed*1.03;
-      } else if ( this.angleOfHeal > 0.139626) { // >8 degrees +2%
+      } else if ( this.angleOfHeel > 0.139626) { // >8 degrees +2%
         this.aparentWind.speed = this.aparentWind.speed*1.02;
-      } else if ( this.angleOfHeal > 0.10472 ) { // 6 degrees +1%
+      } else if ( this.angleOfHeel > 0.10472 ) { // 6 degrees +1%
         this.aparentWind.speed = this.aparentWind.speed*1.01;
       }
       // now the speed is corrected for angle of heal reative horizontal.
       // apply the cosine rule to correct for angle of heal.
-      this.aparentWind.speed =  this.aparentWind.speed*Math.cos(this.angleOfHeal);
+      this.aparentWind.speed =  this.aparentWind.speed*Math.cos(this.angleOfHeel);
 
 
       // apply motion corrections to the windSpeed and windAngle, the mast is moving
@@ -696,8 +719,8 @@
       // wind angle. This is probably true for low angles of heel.
 
       var tipVelocity = {
-        roll: this.rateGyro.roll*this.config.mastHeight,
-        pitch: this.rateGyro.pitch*this.config.mastHeight
+        roll: this.rateGyro.roll.mean()*this.config.mastHeight,
+        pitch: this.rateGyro.pitch.mean()*this.config.mastHeight
       };
       var correctedWind = {
         roll: this.windAngleStats.sin.mean()*this.aparentWind.speed-tipVelocity.roll,
@@ -705,6 +728,7 @@
       };
       this.aparentWind.speed = Math.sqrt(correctedWind.roll*correctedWind.roll+correctedWind.pitch*correctedWind.pitch);
       this.aparentWind.angle = Math.atan2(correctedWind.roll, correctedWind.pitch);
+
 
 
   };

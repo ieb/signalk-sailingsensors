@@ -21,15 +21,15 @@
   /**
    * Calculates the stats using an IIR filter with weight filterWeight.
    */
-  function StatsIIR(filterWeight, name) {
+  function StatsIIR(nsamples, name) {
     this.name = name;
-    this.filterWeight = filterWeight;
+    this.nsamples = nsamples;
     this.average = 0;
   }
   StatsIIR.prototype.set = function(v) {
-    this.average = this.average + (this.average-v) >> filterWeight;
+    this.average = this.average - (this.average/this.nsamples) + v;
     var diff = this.average-v;
-    this.stdev = this.stdev + (this.stdev-(diff*diff)) >> filterWeight;
+    this.stdev = this.stdev - (this.stdev/this.nsamples) + (diff*diff);
   };
   StatsIIR.prototype.mean = function() {
     return this.average;
