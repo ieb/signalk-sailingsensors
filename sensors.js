@@ -66,7 +66,6 @@
   function PulseToVelocityIIR(pin, samples, calibration) {
     this.pin = pin;
     this.calibration = calibration;
-    console.log("Pulse calibration ", calibration);
     this.samples = samples;
     this.distanceReset = new Date();
     this.distance = 0.0;
