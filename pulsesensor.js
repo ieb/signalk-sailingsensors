@@ -22,14 +22,16 @@
     wpi = require('wiring-pi');
   } catch (e) {
     wpi = require('./fakewiring-pi');
+    console.log("Loaded Fake Wiring cause:",e);
   }
-  try {
+  wpi.wiringPiSetupSys()
+  /*try {
     // this needs root
     wpi.wiringPiSetup();
   } catch(e) {
     // try with non root.
     wpi.wiringPiSetupSys()
-  }
+  }*/
 
 
   /**

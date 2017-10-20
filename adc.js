@@ -25,7 +25,8 @@
   try {
     ads1x15 = require('node-ads1x15')
   } catch (e) {
-    ads1x15 = require('./fakeads1x15')
+    ads1x15 = require('./fakeads1x15');
+    console.log("Loaded Fake asd cause:", e);
   }
 
 

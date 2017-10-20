@@ -23,12 +23,13 @@
   const stats = require('./stats');
   var IMU; 
   try {
-    ads1x15 = require('node-ads1x15');
+    const ads1x15 = require('node-ads1x15');
     // there is a nodeimu on OSX, however it doesnt work, so the above like will
     // fail and load the fake.
     IMU = new (require('nodeimu')).IMU();        
   } catch (e) {
     IMU = new (require('./fakeimu')).FakeIMU();
+    console.log("Loaded Fake IMU cause:", e);
   }
 
 
