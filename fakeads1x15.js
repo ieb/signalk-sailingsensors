@@ -35,7 +35,8 @@
         var mV;
         if ( ch === 0) {
             angle.next();
-            mV = (4+2*Math.sin(angle.c))*2/3; // Divider is a 2/3 divider, input voltage is sin mean 4v amplitude 6v.
+            console.log("Angle is ",angle.c);
+            mV = (4+2*Math.sin(angle.c))*2/3; // Divider is a 2/3 divider, input voltage is sin mean 4v amplitude 4v.
         } else {
             mV = (4*2*Math.cos(angle.c))*2/3;
         }
