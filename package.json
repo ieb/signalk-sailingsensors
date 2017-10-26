@@ -15,7 +15,7 @@
     "nodeimu": "^2.1.9"
   },
   "optionalDependencies": {
-    "wiring-pi": "*",
+    "node-wiring-pi": "https://github.com/ieb/node-wiring-pi",
     "node-ads1x15": "*"
   },
   "repository": {

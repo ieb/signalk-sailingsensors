@@ -19,7 +19,7 @@
   const stats = require('./stats');
   var wpi; 
   try {
-    wpi = require('wiring-pi');
+    wpi = require('node-wiring-pi');
   } catch (e) {
     wpi = require('./fakewiring-pi');
     console.log("Loaded Fake Wiring cause:",e);
@@ -32,6 +32,10 @@
     // try with non root.
     wpi.wiringPiSetupSys()
   }*/
+
+  function MsToKn(v) {
+    return v*3600.0/1852.0;
+  }
 
 
   /**
@@ -83,7 +87,7 @@
     // m is in ns.
     var pulseDiff = this.npulsesRecieved - this.npulse;
     this.npulse = this.npulsesRecieved;
-    this.pulseFrequency = (1000000000.0)/this.average;
+    this.pulseFrequency = (1000000.0)/this.average;
     // the speed will be non linear wrt to speed, so lookup calibration data.
     // ms/Hz is m/s per cycles/s  and so == m per cycle or pulse, allowing trip and log.
     // this is probably more acurate if the reading is over many seconds.
@@ -96,7 +100,13 @@
     }
     this.distance = this.distance+(pulseDiff/this.pulsesPerMeter);
     this.speed = this.pulseFrequency/this.pulsesPerMeter;
-    console.log("Pulses ",pulseDiff, this.pulseFrequency, this.pulsesPerMeter, this.distance, this.speed);
+    console.log("Pulses ", {
+      npulses : pulseDiff, 
+      frequencyHz : this.pulseFrequency, 
+      pulsesPerM : this.pulsesPerMeter, 
+      distanceTraveled : this.distance, 
+      speed: MsToKn(this.speed)
+    });
     return {
       distance: this.distance,
       speed: this.speed
