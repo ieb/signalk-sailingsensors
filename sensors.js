@@ -25,7 +25,7 @@
   const adc = require("./adc");
   const imu = require("./IMU");
 
-  
+
   // Conversion functions.
   function KnToMs(v) {
     return v*1852.0/3600.0;
@@ -360,6 +360,12 @@
   Sensors.prototype.close = function() {
     this.windSpeedSensor.close();
     this.waterSpeedSensor.close();
+    clearInterval(this.waterSpeedNMEA2000Interval);
+    clearInterval(this.windSpeedNMEA2000Interval);
+    clearInterval(this.outpuInterval);
+    clearInterval(this.calulationInterval);
+    clearInterval(this.windDirectionInterval);
+    clearInterval(this.motionInterval);
   };
 
   Sensors.prototype.calcHeel = function() {

@@ -61,15 +61,30 @@
     wpi.pinMode(pin, wpi.INPUT);
     wpi.pullUpDnControl(pin, wpi.PUD_UP);
     this.average = 0;
+    this.lastdelta = 1000000; // long period between pulses to start with.
     var self = this;
+    // the ISR function captures the last delta and number of pulses.
     wpi.wiringPiISR(pin, wpi.INT_EDGE_FALLING, function(delta) {
-      // apply an IIR filter, use division rather than bit shifting as js is signed.
-      self.average = (self.average*(self.samples-1)+delta)/self.samples;
+      self.lastdelta = delta;
       self.npulsesRecieved++;
     });
+    // the IIR function needs to per called at a constant period so cant be in the ISR function.
+    // if nsamples is 10, then the value will be withing 10% of the difference of the previsous constatnt value after 1s.
+    // eg was 9kn, now 10kn after 1s it will read 9.9kn, and after 2s it will read 9.99kn.
+    // the lower the samples, the faster the reaction and less damping.
+    // previously this was inside the ISR, but since the ISR gets called a varialbe number of times per second the damping was
+    // very high for low frequencies and very low for high frequencies, neither desirable.
+    this.iirinterval = setInterval(function(){
+      self.average = (self.average*(self.samples-1)+self.lastdelta)/self.samples;
+    }, 100);
+
   }
   PulseToVelocityIIR.prototype.close = function() {
-    wpi.cancelPiISR(this.pin);
+    // cancelISR is not supported, by the official WiringPi lib. wpi.cancelPiISR(this.pin);
+    // it wont keep node open if its not canceled and replacing it with a new one will
+    // probably cause it to drop. Not certain what happens to the class where it was created
+    // probably just sits there as a memory leak, so dont open and close this class.
+    clearInterval(this.iirinterval);
   }
 
 

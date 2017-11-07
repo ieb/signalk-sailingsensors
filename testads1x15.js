@@ -15,44 +15,47 @@
  * limitations under the License.
  */
 const adclib = require('./adc');
-  
 
-var adc = new adclib.ADC(0x48, 'dev/i2c-1');
+// test calculating wind angle using ADC at 20Hz. This uses about 0.1% of a core on a Pi3.  
+// the ADC running at 250 samples per second on 4ch will sample at about 200Hz with multiplexing and
+// the the I2C overhead.
 
-var maximums = [6000,6000];
-var minimums = [2000,2000];
+// run the ADC at 50ms intervals with a IIR filter of 10 on the first 2 channels and 100 on the others.
+var adc = new adclib.getADC(0x48,50, [10,10,100,100]);
+
+var maximums = [0,0];
+var minimums = [6000,6000];
 var angleV = [0,1];
 setInterval(function() {
-    adc.readChannels(0, [0,1], [], function(e, data) {
-        if (e) {
-          console.log("Oops:", e);
-          return;
-        }
-        for (var i = 0; i < angleV.length; i++) {
-            maximums[i] = Math.max(maximums[i],data[i]);
-            minimums[i] = Math.min(minimums[i],data[i]);
-            if ( maximums[i] == minimums[i]) {
-                angleV[i] = 0.0;
-             } else {
-                angleV[i] = Math.min(1.0,Math.max(0.0,(data[i]-minimums[i])/(maximums[i]-minimums[i])));
-             }
-        };
-        var result = {
-            sinV: Math.asin(angleV[0]),
-            cosV: Math.acos(angleV[1]),
-            angle: Math.atan2(angleV[0],angleV[1]),
-            // this is an indication of if the max and min are correct. non zero indicates that the max and min are not correct or the sin/cos are non linear
-            err: Math.asin(angleV[0])+Math.acos(angleV[1])-Math.PI/2, 
-            angleV : angleV,
-            max : maximums,
-            min: minimums,
-            data: data
-        }
+    var voltages = adc.getVoltages();
+    for (var i = 0; i < voltages.length; i++) {
+        maximums[i] = Math.max(maximums[i],voltages[i]);
+        minimums[i] = Math.min(minimums[i],voltages[i]);
+        var range = (maximums[i] - minimums[i])/2;
+        var mean = (maximums[i] + minimums[i])/2.0;
+        if ( range < 1E-3) {
+            angleV[i] = 0.0;
+         } else {
+            angleV[i] = Math.min(1.0,Math.max(-1.0,(voltages[i]-mean)/range));
+         }
+    };
+    var result = {
+        //sinV: Math.asin(angleV[0]),
+        //cosV: Math.acos(angleV[1]),
+        angle: Math.atan2(angleV[0],angleV[1]),
+        angleDeg: (Math.atan2(angleV[0],angleV[1])*180)/Math.PI,
+        // this is an indication of if the max and min are correct. non zero indicates that the max and min are not correct or the sin/cos are non linear
+        // err: Math.asin(angleV[0])+Math.acos(angleV[1])-Math.PI/2, 
+        angleV : angleV,
+        max : maximums,
+        min: minimums,
+        voltages: voltages
+    }
 
 
-        console.log(result);
-      });
-    }, 1000);
+    //console.log(result);
+    console.log(Math.round(result.angleDeg));
+}, 50);
 
 
 

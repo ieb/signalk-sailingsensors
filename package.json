@@ -16,7 +16,7 @@
   },
   "optionalDependencies": {
     "node-wiring-pi": "https://github.com/ieb/node-wiring-pi",
-    "node-ads1x15": "*"
+    "i2c": "*"
   },
   "repository": {
     "type" : "git",
