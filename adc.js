@@ -26,9 +26,6 @@
 
     const i2c = require('i2c');
 
-    function byteSwap16(v) {
-      return ((v >> 8) & 0xFF) + ((v << 8) & 0xFF00);
-    }
     /**
      * Stats conversions.
      */

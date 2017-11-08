@@ -219,6 +219,13 @@
         break;
       }
     }
+    // distance is based on a count of pulses since the last read using
+    // the callibration for the current speed. This ensures that no 
+    // pulse is lost, although if the sensor is highly non linear the pulse/disstance
+    // ratio could be out. For this reason the read function must
+    // be called frequently. Once per second would be more than enough given 
+    // the mass of a Pogo1250 is 5500 Kg for something lighter
+    // that could accelerate significantly in 1s a higher rate might be required.
     this.distance = this.distance+(pulseDiff/this.pulsesPerMeter);
     this.speed = pulseFrequency/this.pulsesPerMeter;
     return {

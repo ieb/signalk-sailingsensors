@@ -39,8 +39,8 @@ var waterCalibration = [
       ];
 
 
-var windSpeedSensor = new pulsesensor.PulseToVelocityIIR(6, 10, windCalibration);
-var waterSpeedSensor = new pulsesensor.PulseToVelocityIIR(7, 10, waterCalibration);
+var waterSpeedSensor = new pulsesensor.PulseToVelocityIIR(5, 5, waterCalibration);
+var windSpeedSensor = new pulsesensor.PulseToVelocityIIR(6, 5, windCalibration);
 
     // register a timer for getting IMU data
 setInterval(function() {
